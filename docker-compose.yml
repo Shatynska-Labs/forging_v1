@@ -1,35 +1,19 @@
-version: '3.7'
-
 services:
-  nginx:
-    image: nginx:latest
-    volumes:
-      - /var/www/shatynskyj.in.ua/:/var/www
-      - /var/www/shatynskyj.in.ua/_docker/nginx/conf.d:/etc/nginx/conf.d
-    ports:
-      - 8081:80
+  web:
+    image: ghcr.io/shatynska/shatynskyj:${IMAGE_TAG:?IMAGE_TAG is not rendered}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - platform_edge
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik-public"
-      - "traefik.http.routers.shatynskyj.entrypoints=https"
-      - "traefik.http.routers.shatynskyj.rule=Host(`shatynskyj.localhost`)"
-      - "traefik.http.routers.shatynskyj.tls=true"
-      - "traefik.http.routers.shatynskyj.tls.certresolver=letsEncrypt"
-    networks:
-      - traefik-public
-      - default
-    depends_on:
-      - app
-
-  app:
-    image: getaniftywebsite/php:latest
-    volumes:
-      - /var/www/shatynskyj.in.ua/:/var/www
-      - /var/www/shatynskyj.in.ua/_docker/app/php.ini:/usr/local/etc/php/conf.d/php.ini
-    networks:
-      - default
+      - "traefik.http.routers.shatynskyj.rule=Host(`shatynskyj.in.ua`) || Host(`www.shatynskyj.in.ua`)"
+      - "traefik.http.routers.shatynskyj.entrypoints=websecure"
+      - "traefik.http.routers.shatynskyj.tls.certresolver=letsencrypt"
+      - "traefik.http.services.shatynskyj.loadbalancer.server.port=8080"
 
 networks:
-  traefik-public:
+  platform_edge:
     external: true
-  default:

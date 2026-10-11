@@ -1,4 +1,2 @@
 /tmp
-docker-compose.*
-create-table.txt
-
+.env
