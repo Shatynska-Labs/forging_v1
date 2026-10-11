@@ -1,6 +1,6 @@
 services:
   web:
-    image: ghcr.io/shatynska/shatynskyj:${IMAGE_TAG:?IMAGE_TAG is not rendered}
+    image: ghcr.io/shatynska-labs/shatynskyj:${IMAGE_TAG:?IMAGE_TAG is not rendered}
     restart: unless-stopped
     read_only: true
     tmpfs:

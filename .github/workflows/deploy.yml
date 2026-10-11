@@ -10,7 +10,7 @@ env:
   # Lowercase literal: must match docker-compose.yml and the `shatynskyj`
   # entry in the infrastructure repo's deploy_apps (image reclamation keys
   # on the last path segment).
-  IMAGE_NAME: ghcr.io/shatynska/shatynskyj
+  IMAGE_NAME: ghcr.io/shatynska-labs/shatynskyj
 
 jobs:
   build-and-push:
