@@ -1,0 +1,91 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  # Lowercase literal: must match docker-compose.yml and the `shatynskyj`
+  # entry in the infrastructure repo's deploy_apps (image reclamation keys
+  # on the last path segment).
+  IMAGE_NAME: ghcr.io/shatynska-labs/shatynskyj
+
+jobs:
+  build-and-push:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    concurrency:
+      group: build-shatynskyj
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy (production)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-shatynskyj-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # SSH to the host is reachable only over the tailnet.
+      - name: Connect to the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ vars.DEPLOY_HOST }}
+
+      # A commit SHA is [0-9a-f]{40}, so it needs none of the .env escaping
+      # the infrastructure repo's platform-deploy.yml applies to secrets.
+      - name: Render .env
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: printf 'IMAGE_TAG="%s"\n' "$IMAGE_TAG" > .env
+
+      - name: Deliver and deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.SHATYNSKYJ_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          tar -czf - docker-compose.yml .env \
+            | ssh -i ~/.ssh/deploy_key \
+                -o StrictHostKeyChecking=accept-new \
+                "deploy@${DEPLOY_HOST}"
+
+      - name: Check the public site
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS -o /dev/null https://shatynskyj.in.ua/; then exit 0; fi
+            sleep 10
+          done
+          echo "::warning::https://shatynskyj.in.ua/ is not answering yet (DNS or certificate may still be pending)"
